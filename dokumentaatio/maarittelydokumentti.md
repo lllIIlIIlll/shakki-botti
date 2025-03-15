@@ -4,7 +4,7 @@ Helsingin yliopiston TKT-kandiohjelman aineopintojen harjoitustyö.
 
 ## Aihe ja toteutus
 
-Harjoitustyö toteutan shakkia pelaavan tekoälyn. Ohjelma saa ihmiseltä siirron, johon se laskee optimaalisen vastauksen. Pelin tekoälyssä hyödynnetään Minimax-algoritmia, jota optimoidaan alfa-beta karsinnalla. Harjoitustyössä käytetään kurssin tarjoamaa AI-platformia.
+Harjoitustyössä toteutan shakkia pelaavan tekoälyn. Ohjelma saa ihmiseltä siirron, johon se laskee optimaalisen vastauksen. Pelin tekoälyssä hyödynnetään Minimax-algoritmia, jota optimoidaan alfa-beta karsinnalla. Harjoitustyössä käytetään kurssin tarjoamaa AI-platformia.
 
 ## Tavoitteena olevat aika- ja tilavaativuudet:
 

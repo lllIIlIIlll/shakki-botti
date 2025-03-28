@@ -1,20 +1,14 @@
 module Main (main) where
 
-import Engine (findLegalMoves)
+import Engine (findBestMove)
+import LegalMoves (findLegalMoves)
 import Board (parseFen, updateFen)
+import Types (Color(..))
 
 import System.IO (hFlush, stdout)
 import Data.List.Split (splitOn)
+import Data.Char
 import Data.IORef
-
--- testing purposes
-import System.Random (randomRIO)
-
-getRandomMove :: [a] -> IO a
-getRandomMove xs = do
-  index <- randomRIO (0, length xs - 1)
-  return (xs !! index)
--- testing purposes
 
 setPosition :: IORef String -> String -> IO ()
 setPosition boardRef position = do
@@ -45,29 +39,31 @@ mainLoop boardRef = do
 
       "PLAY" -> do
         currentFen <- readIORef boardRef
-        let legalMoves = findLegalMoves (parseFen currentFen) currentFen
+        let bestMove = findBestMove (parseFen currentFen) currentFen
+        let legalMoves = findLegalMoves (parseFen currentFen) Black
         putStrLn ("These are black's legal moves: " ++ show legalMoves)
-        move <- getRandomMove legalMoves -- random for testing purposes
-        putStrLn ("Black chose the move: " ++ move)
+        putStrLn ("Eval: " ++ show (fst bestMove))
+        putStrLn ("Black chose the move: " ++ snd bestMove)
         hFlush stdout
 
-        putStrLn ("MOVE:" ++ move)
+        putStrLn ("MOVE:" ++ snd bestMove)
         hFlush stdout
 
-        let newBoardRef = updateFen currentFen move
+        let newBoardRef = updateFen currentFen (snd bestMove)
         setPosition boardRef newBoardRef
         mainLoop boardRef
 
       "MOVE" -> do
         currentFen <- readIORef boardRef
-        let legalMoves = findLegalMoves (parseFen currentFen) currentFen
-        putStrLn ("These are white's legal moves: " ++ show legalMoves)
+        -- promotion move's last char is always lowercase
+        let correctedMove = if length resData == 5
+                             then take 4 resData ++ [toUpper (resData !! 4)]
+                             else resData
+        
+        putStrLn ("White chose the move: " ++ correctedMove)
         hFlush stdout
 
-        putStrLn ("White chose the move: " ++ resData)
-        hFlush stdout
-
-        let newBoardRef = updateFen currentFen resData
+        let newBoardRef = updateFen currentFen correctedMove
         setPosition boardRef newBoardRef
         mainLoop boardRef
 

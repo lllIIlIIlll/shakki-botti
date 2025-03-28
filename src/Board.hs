@@ -1,10 +1,12 @@
-module Board (parseFen, updateFen, playMove) where
+module Board (parseFen, updateFen, playMove, boardToFen) where
 
-import Types (Color(..), Piece(..), Board)
-import Utils (squareToCoord, splitMove)
+import Types (Board)
+import Utils (squareToCoord)
 
-import Data.List.Split (splitOn)
+import Data.List.Split (splitOn, chunksOf)
+import Data.List (intercalate)
 import Data.Char
+import qualified Data.Vector as V
 
 -- example fens
 -- 6k1/p3pp1p/1n3bpB/8/1q6/2N4P/PP3PP1/3Q2K1 w KQkq - 0 1
@@ -14,26 +16,30 @@ import Data.Char
 parseFen :: String -> Board
 parseFen fenStr = 
   let rows = splitOn "/" (head (words fenStr))
-  in map parseFenRow rows
+      parsedFenRows = map parseFenRow rows
+  in V.fromList (concat parsedFenRows)
 
-parseFenRow :: String -> [Maybe (Color, Piece)]
-parseFenRow [] = []
-parseFenRow (x:xs) = 
+parseFenRow :: String -> [Int] 
+parseFenRow row = parseFenRowList row
+
+parseFenRowList :: String -> [Int]
+parseFenRowList [] = []
+parseFenRowList (x:xs) = 
   if isDigit x 
-  then replicate (digitToInt x) Nothing ++ parseFenRow xs 
-  else case x of 
-         'r' -> Just (Black, Rook)   : parseFenRow xs
-         'n' -> Just (Black, Knight) : parseFenRow xs
-         'b' -> Just (Black, Bishop) : parseFenRow xs
-         'q' -> Just (Black, Queen)  : parseFenRow xs
-         'k' -> Just (Black, King)   : parseFenRow xs
-         'p' -> Just (Black, Pawn)   : parseFenRow xs
-         'R' -> Just (White, Rook)   : parseFenRow xs
-         'N' -> Just (White, Knight) : parseFenRow xs
-         'B' -> Just (White, Bishop) : parseFenRow xs
-         'Q' -> Just (White, Queen)  : parseFenRow xs
-         'K' -> Just (White, King)   : parseFenRow xs
-         'P' -> Just (White, Pawn)   : parseFenRow xs
+  then replicate (digitToInt x) 0 ++ parseFenRowList xs 
+  else case x of
+         'P' -> 1  : parseFenRowList xs
+         'N' -> 2  : parseFenRowList xs
+         'B' -> 3  : parseFenRowList xs
+         'R' -> 4  : parseFenRowList xs
+         'Q' -> 5  : parseFenRowList xs
+         'K' -> 6  : parseFenRowList xs
+         'p' -> 7  : parseFenRowList xs
+         'n' -> 8  : parseFenRowList xs
+         'b' -> 9  : parseFenRowList xs
+         'r' -> 10 : parseFenRowList xs
+         'q' -> 11 : parseFenRowList xs
+         'k' -> 12 : parseFenRowList xs
          _   -> error "not valid fen"
 
 -- updates the fen position string and toggles the turn
@@ -50,49 +56,57 @@ updateRest (r:rest)
   | otherwise = r  : updateRest rest
 
 boardToFen :: Board -> String
-boardToFen [] = ""
-boardToFen [b] = rowToFen b
-boardToFen (b:board) = rowToFen b ++ "/" ++ boardToFen board
+boardToFen board =
+  let rows = chunksOf 8 (V.toList board)
+      fenRows = map rowToFen rows
+  in intercalate "/" fenRows
 
-rowToFen :: [Maybe (Color, Piece)] -> String
+rowToFen :: [Int] -> String
 rowToFen [] = ""
 rowToFen (r:row) = 
-  case r of 
-    Just (Black, Rook)   -> "r" ++ rowToFen row
-    Just (Black, Knight) -> "n" ++ rowToFen row
-    Just (Black, Bishop) -> "b" ++ rowToFen row
-    Just (Black, Queen)  -> "q" ++ rowToFen row
-    Just (Black, King)   -> "k" ++ rowToFen row
-    Just (Black, Pawn)   -> "p" ++ rowToFen row
-    Just (White, Rook)   -> "R" ++ rowToFen row
-    Just (White, Knight) -> "N" ++ rowToFen row
-    Just (White, Bishop) -> "B" ++ rowToFen row
-    Just (White, Queen)  -> "Q" ++ rowToFen row
-    Just (White, King)   -> "K" ++ rowToFen row
-    Just (White, Pawn)   -> "P" ++ rowToFen row
-    Nothing              -> let n = countNothings (r:row)
-                            in [intToDigit n] ++ rowToFen (drop n (r:row))
+  case r of
+    1  -> "P" ++ rowToFen row
+    2  -> "N" ++ rowToFen row
+    3  -> "B" ++ rowToFen row
+    4  -> "R" ++ rowToFen row
+    5  -> "Q" ++ rowToFen row
+    6  -> "K" ++ rowToFen row
+    7  -> "p" ++ rowToFen row
+    8  -> "n" ++ rowToFen row
+    9  -> "b" ++ rowToFen row
+    10 -> "r" ++ rowToFen row
+    11 -> "q" ++ rowToFen row
+    12 -> "k" ++ rowToFen row
+    0  -> let n = countZeros (r:row)
+          in [intToDigit n] ++ rowToFen (drop n (r:row))
 
-countNothings :: [Maybe a] -> Int
-countNothings [] = 0
-countNothings (Nothing:xs) = 1 + countNothings xs
-countNothings _ = 0
+countZeros :: [Int] -> Int
+countZeros [] = 0
+countZeros (0:xs) = 1 + countZeros xs
+countZeros _ = 0
 
--- no castling, en passant or promotion yet.
--- these are also used when checking if the king is checked.
+-- takes a move string and updates the board
 playMove :: Board -> String -> Board
 playMove board move = 
-  let (srcSq, destSq) = splitMove move
-  in newBoard board (squareToCoord srcSq) (squareToCoord destSq)
+  case move of
+    [a, b, c, d] -> newBoard board (squareToCoord [a, b]) (squareToCoord [c, d]) Nothing
+    [a, b, c, d, piece] -> newBoard board (squareToCoord [a, b]) (squareToCoord [c, d]) (Just piece)
 
-newBoard :: Board -> (Int, Int) -> (Int, Int) -> Board
-newBoard board src dest =
-  let pieceToMove = (board !! (fst src)) !! (snd src)
-      boardWithoutPiece = updateBoard board src Nothing
-  in updateBoard boardWithoutPiece dest pieceToMove
+newBoard :: Board -> (Int, Int) -> (Int, Int) -> Maybe Char -> Board
+newBoard board (srcRow, srcCol) (destRow, destCol) piece =
+  let pieceToMove = case piece of
+                      Nothing   -> V.unsafeIndex board (srcRow * 8 + srcCol)
+                      Just char -> charToPiece char
+  in V.unsafeUpd board [((srcRow * 8 + srcCol), 0), ((destRow * 8 + destCol), pieceToMove)]
 
-updateBoard :: Board -> (Int, Int) -> Maybe (Color, Piece) -> Board
-updateBoard board coord update = 
-  let row = board !! (fst coord)
-      updatedRow = take (snd coord) row ++ [update] ++ drop ((snd coord) + 1) row
-  in take (fst coord) board ++ [updatedRow] ++ drop ((fst coord) + 1) board
+charToPiece :: Char -> Int
+charToPiece char = 
+  case char of
+    'N' -> 2
+    'B' -> 3
+    'R' -> 4
+    'Q' -> 5
+    'n' -> 8
+    'b' -> 9
+    'r' -> 10
+    'q' -> 11

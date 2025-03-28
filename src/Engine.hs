@@ -1,178 +1,98 @@
-module Engine (findLegalMoves) where
+module Engine (findBestMove) where
 
-import Data.List()
+import Data.List(maximumBy, minimumBy)
+import Data.Ord
 import Data.List.Split()
+import qualified Data.Vector as V
 
-import Utils (coordToSquare, splitMove, checkBounds)
+import Utils (toggleColor)
+import LegalMoves (findLegalMoves, checkmateDetection, mapPieces) 
 import Board (playMove)
 import Types (Color(..), Piece(..), Board)
+import PieceSquareTables (
+  whitePawnPrefCoords,
+  blackPawnPrefCoords,
+  whiteKnightPrefCoords,
+  blackKnightPrefCoords,
+  whiteBishopPrefCoords,
+  blackBishopPrefCoords,
+  whiteRookPrefCoords,
+  blackRookPrefCoords,
+  whiteQueenPrefCoords,
+  blackQueenPrefCoords,
+  whiteKingPrefCoords,
+  blackKingPrefCoords
+  )
 
--- first generates pseudo-legal moves and then filters out ones that leaves the king in check
-findLegalMoves :: Board -> String -> [String]
-findLegalMoves board fen = 
+-- this is the function that the mainloop calls to play engine's move
+findBestMove :: Board -> String -> (Int, String)
+findBestMove board fen = 
   let color = if (words fen) !! 1 == "w" then White else Black
-      piecesWithCoords = mapPieces board
-      pseudoLegal = listLegalMoves piecesWithCoords color board
-      legalMoves = filter (\move -> not (kingInCheck board move color)) pseudoLegal
-  in legalMoves
+      bestMove = minimax board 4 color
+  in case bestMove of
+      (eval, Just move) -> (eval, move)
+      (_, Nothing)      -> (99, "")
 
--- creates a list that contains a tuple of a square's coordinate and a piece if there is one
-mapPieces :: Board -> [((Int, Int), Maybe (Color, Piece))]
-mapPieces board = 
-  [((row, col), maybePiece) | (row, rowList) <- zip [0..] board, (col, maybePiece) <- zip [0..] rowList]
+minimax :: Board -> Int -> Color -> (Int, Maybe String)
+minimax board depth color
+  | depth == 0 = 
+    let moves = findLegalMoves board color
+    in (evaluate board color depth moves, Nothing)
+  | otherwise = 
+    let moves = findLegalMoves board color
+    in if null moves
+       then (evaluate board color depth moves, Nothing)
+       else
+         let evals = [(minimax (playMove board move) (depth - 1) (toggleColor color), move) | move <- moves]
+             bestTuple = if color == White
+                         then maximumBy (comparing (fst . fst)) evals
+                         else minimumBy (comparing (fst . fst)) evals
+         in (fst (fst bestTuple), Just (snd bestTuple))
+      
+evaluate :: Board -> Color -> Int -> [String] -> Int
+evaluate board color depth moves = 
+  if null moves
+  then if checkmateDetection board color
+       then if color == White
+            then -100000 - depth
+            else 100000  + depth
+       else 0 -- stalemate
+  else evaluateBoard board
+      
+evaluateBoard :: Board -> Int
+evaluateBoard board = 
+  let materialEval = V.sum (V.map getPieceValue board)
+      positionEval = calculatePosEval (mapPieces board) 
+  in materialEval + positionEval
 
-listLegalMoves :: [((Int, Int), Maybe (Color, Piece))] -> Color -> Board -> [String]
-listLegalMoves [] _ _ = []
-listLegalMoves (((row, col), maybePiece):rest) color board =
-  case maybePiece of
-    Just (color', piece') ->
-      if color' == color
-      then case piece' of
-             Rook   -> findLegalRookMoves board (row, col) color   ++ listLegalMoves rest color board
-             Knight -> findLegalKnightMoves board (row, col) color ++ listLegalMoves rest color board
-             Bishop -> findLegalBishopMoves board (row, col) color ++ listLegalMoves rest color board
-             Queen  -> findLegalQueenMoves board (row, col) color  ++ listLegalMoves rest color board
-             King   -> findLegalKingMoves board (row, col) color   ++ listLegalMoves rest color board
-             Pawn   -> findLegalPawnMoves board (row, col) color   ++ listLegalMoves rest color board
-      else listLegalMoves rest color board
-    Nothing -> listLegalMoves rest color board
+calculatePosEval :: [((Int, Int), Int)] -> Int
+calculatePosEval [] = 0
+calculatePosEval (((row, col), piece):pieces) = 
+  case piece of 
+    1  -> whitePawnPrefCoords   V.! ((row * 8) + col) + calculatePosEval pieces
+    2  -> whiteKnightPrefCoords V.! ((row * 8) + col) + calculatePosEval pieces
+    3  -> whiteBishopPrefCoords V.! ((row * 8) + col) + calculatePosEval pieces
+    4  -> whiteRookPrefCoords   V.! ((row * 8) + col) + calculatePosEval pieces
+    5  -> whiteQueenPrefCoords  V.! ((row * 8) + col) + calculatePosEval pieces
+    6  -> calculatePosEval pieces -- whiteKingPrefCoords   V.! ((row * 8) + col) 
+    7  -> blackPawnPrefCoords   V.! ((row * 8) + col) + calculatePosEval pieces
+    8  -> blackKnightPrefCoords V.! ((row * 8) + col) + calculatePosEval pieces
+    9  -> blackBishopPrefCoords V.! ((row * 8) + col) + calculatePosEval pieces
+    10 -> blackRookPrefCoords   V.! ((row * 8) + col) + calculatePosEval pieces
+    11 -> blackQueenPrefCoords  V.! ((row * 8) + col) + calculatePosEval pieces
+    12 -> calculatePosEval pieces -- blackKingPrefCoords   V.! ((row * 8) + col)
 
--- sliding pieces
-findLegalRookMoves :: Board -> (Int, Int) -> Color -> [String]
-findLegalRookMoves board position color = 
-  movesInDirection board position position (0, 1) color
-  ++ movesInDirection board position position (0, -1) color
-  ++ movesInDirection board position position (1, 0) color
-  ++ movesInDirection board position position (-1, 0) color
-
-findLegalBishopMoves :: Board -> (Int, Int)-> Color -> [String]
-findLegalBishopMoves board position color = 
-  movesInDirection board position position (1, 1) color
-  ++ movesInDirection board position position (1, -1) color
-  ++ movesInDirection board position position (-1, 1) color
-  ++ movesInDirection board position position (-1, -1) color
-
-findLegalQueenMoves :: Board -> (Int, Int) -> Color -> [String]
-findLegalQueenMoves board position color = 
-  movesInDirection board position position (0, 1) color
-  ++ movesInDirection board position position (0, -1) color
-  ++ movesInDirection board position position (1, 0) color
-  ++ movesInDirection board position position (-1, 0) color
-  ++ movesInDirection board position position (1, 1) color
-  ++ movesInDirection board position position (1, -1) color
-  ++ movesInDirection board position position (-1, 1) color
-  ++ movesInDirection board position position (-1, -1) color
-
--- generates legal moves for sliding pieces
-movesInDirection :: Board -> (Int, Int) -> (Int, Int) -> (Int, Int) -> Color -> [String]
-movesInDirection board startSq (row, col) (x, y) color = 
-  if checkBounds (row + x, col + y)
-  then let nextSq = board !! (row + x) !! (col + y)
-           moveStr = coordToSquare startSq ++ coordToSquare (row + x, col + y)
-       in case nextSq of
-            Nothing -> 
-              moveStr : movesInDirection board startSq ((row + x), (col + y)) (x, y) color
-            Just (pieceColor, _ ) -> 
-              if pieceColor == color
-              then []
-              else [moveStr]
-  else []
-
--- non-sliding pieces
-findLegalKnightMoves :: Board -> (Int, Int) -> Color -> [String]
-findLegalKnightMoves board (row, col) color = 
-  let moves = [(2, 1), (2, -1), (-2, 1), (-2, -1), (1, 2), (1, -2), (-1, 2), (-1, -2)]
-      knigthMoves = [(row + x, col + y) | (x, y) <- moves, checkBounds (row + x, col + y)]
-  in checkSquare board (row, col) knigthMoves color
-
-findLegalKingMoves :: Board -> (Int, Int) -> Color -> [String]
-findLegalKingMoves board (row, col) color =
-  let moves = [(0, 1), (0, -1), (1, 0), (-1, 0), (1, 1), (1, -1), (-1, 1), (-1, -1)]
-      kingMoves = [(row + x, col + y) | (x, y) <- moves, checkBounds (row + x, col + y)]
-  in checkSquare board (row, col) kingMoves color
-
--- generates legal moves for non-sliding pieces
-checkSquare :: Board -> (Int, Int) -> [(Int, Int)] -> Color -> [String]
-checkSquare _ _ [] _ = []
-checkSquare board startSq ((row, col):rest) color = 
-  let moveStr = coordToSquare startSq ++ coordToSquare (row, col)
-  in case board !! row !! col of
-       Nothing ->
-         moveStr : checkSquare board startSq rest color
-       Just (pieceColor, _) ->
-         if pieceColor == color
-         then checkSquare board startSq rest color
-         else moveStr : checkSquare board startSq rest color
-
-findLegalPawnMoves :: Board -> (Int, Int) -> Color -> [String]
-findLegalPawnMoves board (row, col) color =
-  let moves = isFirstMove row color
-      pawnMoves = [(row + x , col + y) | (x, y) <- moves, checkBounds (row + x, col + y)]
-      pawnCaptures = [(row + x, col + y) | (x, y) <- if color == White then [(-1, 1), (-1, -1)] else [(1, -1), (1, 1)], checkBounds (row + x , col + y)]
-  in checkPawnMoves board (row, col) pawnMoves color ++ checkPawnCaptures board (row, col) pawnCaptures color
-
--- helper for pawnMoves
-isFirstMove :: Int -> Color -> [(Int, Int)]
-isFirstMove row color
-  | color == White && row == 6 = [(-1, 0), (-2, 0)]
-  | color == Black && row == 1 = [(1, 0), (2, 0)]
-  | color == White = [(-1, 0)]
-  | otherwise = [(1, 0)]
-
-checkPawnMoves :: Board -> (Int, Int) -> [(Int, Int)] -> Color -> [String]
-checkPawnMoves _ _ [] _ = []
-checkPawnMoves board startSq ((row, col):rest) color =
-  let moveStr = coordToSquare startSq ++ coordToSquare (row, col)
-      twoSqMove = abs ((fst startSq) - row) > 1
-  in if twoSqMove
-     then case board !! (rowAdjustment color row) !! (col) of
-            Nothing -> 
-              case board !! row !! col of
-                Nothing ->
-                  moveStr : checkPawnMoves board startSq rest color
-                _ -> 
-                  checkPawnMoves board startSq rest color
-            _ -> []
-     else case board !! row !! col of
-              Nothing ->
-                moveStr : checkPawnMoves board startSq rest color
-              _ ->
-                checkPawnMoves board startSq rest color
-
--- checks if pawn capture offsets target an enemy piece, returns list of possible captures
-checkPawnCaptures :: Board -> (Int, Int) -> [(Int, Int)] -> Color -> [String]
-checkPawnCaptures _ _ [] _ = [] 
-checkPawnCaptures board startSq ((row, col):rest) color = 
-  let moveStr = coordToSquare startSq ++ coordToSquare (row, col)
-  in case board !! row !! col of
-    Nothing ->
-      checkPawnCaptures board startSq rest color
-    Just (pieceColor, _) ->
-      if pieceColor == color
-      then checkPawnCaptures board startSq rest color
-      else moveStr : checkPawnCaptures board startSq rest color
-
--- different offset for white and black when pawn tries to move over piece
-rowAdjustment :: Color -> Int -> Int
-rowAdjustment (White) x = x + 1
-rowAdjustment _  x = x - 1
-
--- simulates board after pseudo-legal move and checks if truly legal
--- (king is not in check after the move)
-kingInCheck :: Board -> String -> Color -> Bool
-kingInCheck board move color = 
-  let boardAfterMove = playMove board move
-      opponentColor = if color == White then Black else White
-      kingCoord = kingLocation (mapPieces boardAfterMove) color
-      enemyMoves = listLegalMoves (mapPieces boardAfterMove) opponentColor boardAfterMove
-  in elem kingCoord (map (snd . splitMove) enemyMoves)
-
-kingLocation :: [((Int, Int), Maybe (Color, Piece))] -> Color -> String
-kingLocation [] _ = ""
-kingLocation (((row, col), maybePiece):rest) color = 
-  case maybePiece of
-    Just (color', King) ->
-      if color' == color
-        then coordToSquare (row, col)
-        else kingLocation rest color
-    _ -> kingLocation rest color
+getPieceValue :: Int -> Int
+getPieceValue 0  = 0     -- empty square
+getPieceValue 1  = 100   -- white pawn
+getPieceValue 2  = 300   -- white knight
+getPieceValue 3  = 300   -- white bishop
+getPieceValue 4  = 500   -- white rook
+getPieceValue 5  = 900   -- white queen
+getPieceValue 6  = 0     -- white king
+getPieceValue 7  = -100  -- black pawn
+getPieceValue 8  = -300  -- black knight
+getPieceValue 9  = -300  -- black bishop
+getPieceValue 10 = -500  -- black rook
+getPieceValue 11 = -900  -- black queen
+getPieceValue 12 = 0     -- black king

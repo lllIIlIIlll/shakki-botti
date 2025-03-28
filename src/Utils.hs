@@ -1,5 +1,6 @@
-module Utils (coordToSquare, squareToCoord, splitMove, checkBounds) where
+module Utils (coordToSquare, squareToCoord, splitMove, checkBounds, toggleColor) where
 
+import Types (Color(..))
 import Data.Char
 
 -- convert coordinate to move string
@@ -21,8 +22,14 @@ squareToCoord square = let col = ord (head square) - ord 'a'
 
 -- split move string to source square and destination square
 splitMove :: String -> (String, String)
-splitMove move = (take 2 move, drop 2 move)
+splitMove [a, b, c, d] = ([a, b], [c, d])
+splitMove [a, b, c, d, _] = ([a, b], [c, d]) 
 
 -- check if move stays on the board
 checkBounds :: (Int, Int) -> Bool
 checkBounds (row, col) = row >= 0 && row < 8 && col >= 0 && col < 8
+
+-- toggle color
+toggleColor :: Color -> Color
+toggleColor (White) = Black
+toggleColor _ = White

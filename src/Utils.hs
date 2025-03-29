@@ -13,23 +13,27 @@ coordToSquare (row, 4) = "e" ++ show (8 - row)
 coordToSquare (row, 5) = "f" ++ show (8 - row)
 coordToSquare (row, 6) = "g" ++ show (8 - row)
 coordToSquare (row, 7) = "h" ++ show (8 - row)
+coordToSquare _        = error "invalid coord"
 
 -- convert square to coordinate
 squareToCoord :: String -> (Int, Int)
-squareToCoord square = let col = ord (head square) - ord 'a'
-                           row = 8 - digitToInt (last square)
-                       in (row, col)
+squareToCoord square = 
+  let col = ord (head square) - ord 'a'
+      row = 8 - digitToInt (last square)
+  in (row, col)
 
 -- split move string to source square and destination square
 splitMove :: String -> (String, String)
-splitMove [a, b, c, d] = ([a, b], [c, d])
-splitMove [a, b, c, d, _] = ([a, b], [c, d]) 
+splitMove [a, b, c, d]    = ([a, b], [c, d])
+splitMove [a, b, c, d, _] = ([a, b], [c, d])
+splitMove _               = error "invalid move string"
 
 -- check if move stays on the board
 checkBounds :: (Int, Int) -> Bool
-checkBounds (row, col) = row >= 0 && row < 8 && col >= 0 && col < 8
+checkBounds (row, col) = 
+  row >= 0 && row < 8 && col >= 0 && col < 8
 
 -- toggle color
 toggleColor :: Color -> Color
-toggleColor (White) = Black
-toggleColor _ = White
+toggleColor White = Black
+toggleColor _     = White

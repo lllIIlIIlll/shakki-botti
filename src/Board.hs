@@ -1,7 +1,7 @@
 module Board (parseFen, updateFen, playMove, boardToFen) where
 
-import Types (Board)
-import Utils (squareToCoord)
+import Types (Board, Move(..))
+import Utils (splitMove, squareToCoord)
 
 import Data.List.Split (splitOn, chunksOf)
 import Data.List (intercalate)
@@ -16,11 +16,8 @@ import qualified Data.Vector as V
 parseFen :: String -> Board
 parseFen fenStr = 
   let rows = splitOn "/" (head (words fenStr))
-      parsedFenRows = map parseFenRow rows
+      parsedFenRows = map parseFenRowList rows
   in V.fromList (concat parsedFenRows)
-
-parseFenRow :: String -> [Int] 
-parseFenRow row = parseFenRowList row
 
 parseFenRowList :: String -> [Int]
 parseFenRowList [] = []
@@ -44,9 +41,14 @@ parseFenRowList (x:xs) =
 
 -- updates the fen position string and toggles the turn
 updateFen :: String -> String -> String
-updateFen currentFen move = 
-  (boardToFen (playMove (parseFen currentFen) move)) 
-  ++ " " ++ unwords (updateRest (tail (words currentFen)))
+updateFen currentFen moveStr = 
+  let (from', dest') = splitMove moveStr
+      promotion = if length moveStr == 5 then Just (last moveStr) else Nothing
+      move = Move { from      = squareToCoord from',
+                    dest      = squareToCoord dest',
+                    promotion = promotion,
+                    capture   = Nothing }
+   in boardToFen (playMove (parseFen currentFen) move) ++ " " ++ unwords (updateRest (tail (words currentFen)))
 
 updateRest :: [String] -> [String]
 updateRest [] = []
@@ -78,7 +80,7 @@ rowToFen (r:row) =
     11 -> "q" ++ rowToFen row
     12 -> "k" ++ rowToFen row
     0  -> let n = countZeros (r:row)
-          in [intToDigit n] ++ rowToFen (drop n (r:row))
+          in intToDigit n : rowToFen (drop n (r:row))
 
 countZeros :: [Int] -> Int
 countZeros [] = 0
@@ -86,18 +88,16 @@ countZeros (0:xs) = 1 + countZeros xs
 countZeros _ = 0
 
 -- takes a move string and updates the board
-playMove :: Board -> String -> Board
+playMove :: Board -> Move -> Board
 playMove board move = 
-  case move of
-    [a, b, c, d] -> newBoard board (squareToCoord [a, b]) (squareToCoord [c, d]) Nothing
-    [a, b, c, d, piece] -> newBoard board (squareToCoord [a, b]) (squareToCoord [c, d]) (Just piece)
+  newBoard board (from move) (dest move) (promotion move)
 
 newBoard :: Board -> (Int, Int) -> (Int, Int) -> Maybe Char -> Board
 newBoard board (srcRow, srcCol) (destRow, destCol) piece =
   let pieceToMove = case piece of
                       Nothing   -> V.unsafeIndex board (srcRow * 8 + srcCol)
                       Just char -> charToPiece char
-  in V.unsafeUpd board [((srcRow * 8 + srcCol), 0), ((destRow * 8 + destCol), pieceToMove)]
+  in V.unsafeUpd board [(srcRow * 8 + srcCol, 0), (destRow * 8 + destCol, pieceToMove)]
 
 charToPiece :: Char -> Int
 charToPiece char = 

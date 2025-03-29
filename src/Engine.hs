@@ -1,14 +1,14 @@
-module Engine (findBestMove) where
+module Engine (findBestMove, evaluateBoard) where
 
 import Data.List(maximumBy, minimumBy)
 import Data.Ord
 import Data.List.Split()
 import qualified Data.Vector as V
 
-import Utils (toggleColor)
+import Utils (toggleColor, coordToSquare)
 import LegalMoves (findLegalMoves, checkmateDetection, mapPieces) 
 import Board (playMove)
-import Types (Color(..), Piece(..), Board)
+import Types (Color(..), Move(..), Board)
 import PieceSquareTables (
   whitePawnPrefCoords,
   blackPawnPrefCoords,
@@ -20,20 +20,24 @@ import PieceSquareTables (
   blackRookPrefCoords,
   whiteQueenPrefCoords,
   blackQueenPrefCoords,
-  whiteKingPrefCoords,
-  blackKingPrefCoords
+  --whiteKingPrefCoords,
+  --blackKingPrefCoords
   )
 
 -- this is the function that the mainloop calls to play engine's move
 findBestMove :: Board -> String -> (Int, String)
 findBestMove board fen = 
-  let color = if (words fen) !! 1 == "w" then White else Black
+  let color = if words fen !! 1 == "w" then White else Black
       bestMove = minimax board 4 color
   in case bestMove of
-      (eval, Just move) -> (eval, move)
+      (eval, Just move) ->
+        let moveStr = coordToSquare (from move) ++ coordToSquare (dest move)  
+        in case promotion move of
+             Just p -> (eval, moveStr ++ [p])
+             Nothing        -> (eval, moveStr)
       (_, Nothing)      -> (99, "")
 
-minimax :: Board -> Int -> Color -> (Int, Maybe String)
+minimax :: Board -> Int -> Color -> (Int, Maybe Move)
 minimax board depth color
   | depth == 0 = 
     let moves = findLegalMoves board color
@@ -49,7 +53,7 @@ minimax board depth color
                          else minimumBy (comparing (fst . fst)) evals
          in (fst (fst bestTuple), Just (snd bestTuple))
       
-evaluate :: Board -> Color -> Int -> [String] -> Int
+evaluate :: Board -> Color -> Int -> [Move] -> Int
 evaluate board color depth moves = 
   if null moves
   then if checkmateDetection board color
@@ -69,21 +73,21 @@ calculatePosEval :: [((Int, Int), Int)] -> Int
 calculatePosEval [] = 0
 calculatePosEval (((row, col), piece):pieces) = 
   case piece of 
-    1  -> whitePawnPrefCoords   V.! ((row * 8) + col) + calculatePosEval pieces
-    2  -> whiteKnightPrefCoords V.! ((row * 8) + col) + calculatePosEval pieces
-    3  -> whiteBishopPrefCoords V.! ((row * 8) + col) + calculatePosEval pieces
-    4  -> whiteRookPrefCoords   V.! ((row * 8) + col) + calculatePosEval pieces
-    5  -> whiteQueenPrefCoords  V.! ((row * 8) + col) + calculatePosEval pieces
-    6  -> calculatePosEval pieces -- whiteKingPrefCoords   V.! ((row * 8) + col) 
-    7  -> blackPawnPrefCoords   V.! ((row * 8) + col) + calculatePosEval pieces
-    8  -> blackKnightPrefCoords V.! ((row * 8) + col) + calculatePosEval pieces
-    9  -> blackBishopPrefCoords V.! ((row * 8) + col) + calculatePosEval pieces
-    10 -> blackRookPrefCoords   V.! ((row * 8) + col) + calculatePosEval pieces
-    11 -> blackQueenPrefCoords  V.! ((row * 8) + col) + calculatePosEval pieces
+    1  -> V.unsafeIndex whitePawnPrefCoords   ((row * 8) + col) + calculatePosEval pieces
+    2  -> V.unsafeIndex whiteKnightPrefCoords ((row * 8) + col) + calculatePosEval pieces
+    3  -> V.unsafeIndex whiteBishopPrefCoords ((row * 8) + col) + calculatePosEval pieces
+    4  -> V.unsafeIndex whiteRookPrefCoords   ((row * 8) + col) + calculatePosEval pieces
+    5  -> V.unsafeIndex whiteQueenPrefCoords  ((row * 8) + col) + calculatePosEval pieces
+    6  -> calculatePosEval pieces -- V.unsafeIndex whiteKingPrefCoords ((row * 8) + col) 
+    7  -> V.unsafeIndex blackPawnPrefCoords   ((row * 8) + col) + calculatePosEval pieces
+    8  -> V.unsafeIndex blackKnightPrefCoords ((row * 8) + col) + calculatePosEval pieces
+    9  -> V.unsafeIndex blackBishopPrefCoords ((row * 8) + col) + calculatePosEval pieces
+    10 -> V.unsafeIndex blackRookPrefCoords   ((row * 8) + col) + calculatePosEval pieces
+    11 -> V.unsafeIndex blackQueenPrefCoords  ((row * 8) + col) + calculatePosEval pieces
     12 -> calculatePosEval pieces -- blackKingPrefCoords   V.! ((row * 8) + col)
+    _  -> error "not a valid piece"
 
 getPieceValue :: Int -> Int
-getPieceValue 0  = 0     -- empty square
 getPieceValue 1  = 100   -- white pawn
 getPieceValue 2  = 300   -- white knight
 getPieceValue 3  = 300   -- white bishop
@@ -96,3 +100,4 @@ getPieceValue 9  = -300  -- black bishop
 getPieceValue 10 = -500  -- black rook
 getPieceValue 11 = -900  -- black queen
 getPieceValue 12 = 0     -- black king
+getPieceValue _  = 0

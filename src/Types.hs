@@ -1,4 +1,4 @@
-module Types (Color(..), Piece(..), Board) where
+module Types (Color(..), Piece(..), Move(..), Board) where
 
 import Data.Vector as V
 
@@ -27,5 +27,6 @@ type Board = V.Vector Int
 data Move = Move {
   from      :: (Int, Int),
   dest      :: (Int, Int),
-  promotion :: Maybe Char
+  promotion :: Maybe Char,
+  capture   :: Maybe Int
 } deriving (Show, Eq)

@@ -2,12 +2,12 @@ module LegalMoves (findLegalMoves, checkmateDetection, mapPieces) where
 
 import qualified Data.Vector as V
 
-import Utils (coordToSquare, splitMove, checkBounds, toggleColor)
+import Utils (checkBounds, toggleColor)
 import Board (playMove)
-import Types (Color(..), Board)
+import Types (Color(..), Move(..), Board)
 
 -- first generate pseudo-legal moves and then filter out ones that leaves the king in check
-findLegalMoves :: Board -> Color -> [String]
+findLegalMoves :: Board -> Color -> [Move]
 findLegalMoves board color = 
   let piecesWithCoords = mapPieces board
       pseudoLegal = listLegalMoves piecesWithCoords color board
@@ -25,7 +25,7 @@ mapPieces board =
   , piece /= 0
   ]
 
-listLegalMoves :: [((Int, Int), Int)] -> Color -> Board -> [String]
+listLegalMoves :: [((Int, Int), Int)] -> Color -> Board -> [Move]
 listLegalMoves [] _ _ = []
 listLegalMoves (((row, col), piece):rest) color board =
   if color == White
@@ -47,21 +47,21 @@ listLegalMoves (((row, col), piece):rest) color board =
     _ -> listLegalMoves rest color board
 
 -- sliding pieces
-findLegalRookMoves :: Board -> (Int, Int) -> Color -> [String]
+findLegalRookMoves :: Board -> (Int, Int) -> Color -> [Move]
 findLegalRookMoves board position color = 
   movesInDirection board position position (0, 1) color
   ++ movesInDirection board position position (0, -1) color
   ++ movesInDirection board position position (1, 0) color
   ++ movesInDirection board position position (-1, 0) color
 
-findLegalBishopMoves :: Board -> (Int, Int)-> Color -> [String]
+findLegalBishopMoves :: Board -> (Int, Int)-> Color -> [Move]
 findLegalBishopMoves board position color = 
   movesInDirection board position position (1, 1) color
   ++ movesInDirection board position position (1, -1) color
   ++ movesInDirection board position position (-1, 1) color
   ++ movesInDirection board position position (-1, -1) color
 
-findLegalQueenMoves :: Board -> (Int, Int) -> Color -> [String]
+findLegalQueenMoves :: Board -> (Int, Int) -> Color -> [Move]
 findLegalQueenMoves board position color = 
   movesInDirection board position position (0, 1) color
   ++ movesInDirection board position position (0, -1) color
@@ -73,47 +73,64 @@ findLegalQueenMoves board position color =
   ++ movesInDirection board position position (-1, -1) color
 
 -- generates legal moves for sliding pieces
-movesInDirection :: Board -> (Int, Int) -> (Int, Int) -> (Int, Int) -> Color -> [String]
+movesInDirection :: Board -> (Int, Int) -> (Int, Int) -> (Int, Int) -> Color -> [Move]
 movesInDirection board startSq (row, col) (x, y) color = 
   if checkBounds (row + x, col + y)
-  then let nextSq = V.unsafeIndex board ((row + x) * 8 + (col + y))
-           moveStr = coordToSquare startSq ++ coordToSquare (row + x, col + y)
-       in case nextSq of
-            0 -> 
-              moveStr : movesInDirection board startSq ((row + x), (col + y)) (x, y) color
-            code
-              | color == White && code <= 6 -> []
-              | color == Black && code >= 7 -> []
-              | otherwise                   -> [moveStr]
+  then 
+    let nextSq = V.unsafeIndex board ((row + x) * 8 + (col + y))
+    in case nextSq of
+         0 ->
+           let move = Move { from      = startSq,
+                             dest      = (row + x, col + y),
+                             promotion = Nothing,
+                             capture   = Nothing }
+           in move : movesInDirection board startSq (row + x, col + y) (x, y) color
+         code
+           | color == White && code <= 6 -> []
+           | color == Black && code >= 7 -> []
+           | otherwise -> 
+              let captureMove = Move { from      = startSq,
+                                       dest      = (row + x, col + y),
+                                       promotion = Nothing,
+                                       capture   = Just code }
+              in [captureMove]
   else []
 
 -- non-sliding pieces
-findLegalKnightMoves :: Board -> (Int, Int) -> Color -> [String]
+findLegalKnightMoves :: Board -> (Int, Int) -> Color -> [Move]
 findLegalKnightMoves board (row, col) color = 
   let moves = [(2, 1), (2, -1), (-2, 1), (-2, -1), (1, 2), (1, -2), (-1, 2), (-1, -2)]
       knigthMoves = [(row + x, col + y) | (x, y) <- moves, checkBounds (row + x, col + y)]
   in checkSquare board (row, col) knigthMoves color
 
-findLegalKingMoves :: Board -> (Int, Int) -> Color -> [String]
+findLegalKingMoves :: Board -> (Int, Int) -> Color -> [Move]
 findLegalKingMoves board (row, col) color =
   let moves = [(0, 1), (0, -1), (1, 0), (-1, 0), (1, 1), (1, -1), (-1, 1), (-1, -1)]
       kingMoves = [(row + x, col + y) | (x, y) <- moves, checkBounds (row + x, col + y)]
   in checkSquare board (row, col) kingMoves color
 
 -- generates legal moves for non-sliding pieces
-checkSquare :: Board -> (Int, Int) -> [(Int, Int)] -> Color -> [String]
+checkSquare :: Board -> (Int, Int) -> [(Int, Int)] -> Color -> [Move]
 checkSquare _ _ [] _ = []
 checkSquare board startSq ((row, col):rest) color = 
-  let moveStr = coordToSquare startSq ++ coordToSquare (row, col)
-  in case V.unsafeIndex board (row * 8 + col) of
-       0 ->
-         moveStr : checkSquare board startSq rest color
-       code
-         | color == White && code <= 6 -> checkSquare board startSq rest color
-         | color == Black && code >= 7 -> checkSquare board startSq rest color
-         | otherwise                   -> moveStr : checkSquare board startSq rest color
+  case V.unsafeIndex board (row * 8 + col) of
+    0 ->
+      let move = Move { from      = startSq,
+                        dest      = (row, col),
+                        promotion = Nothing,
+                        capture   = Nothing }
+      in move : checkSquare board startSq rest color
+    code
+      | color == White && code <= 6 -> checkSquare board startSq rest color
+      | color == Black && code >= 7 -> checkSquare board startSq rest color
+      | otherwise -> 
+          let captureMove = Move { from      = startSq,
+                                   dest      = (row, col),
+                                   promotion = Nothing,
+                                   capture   = Just code }
+          in captureMove : checkSquare board startSq rest color
 
-findLegalPawnMoves :: Board -> (Int, Int) -> Color -> [String]
+findLegalPawnMoves :: Board -> (Int, Int) -> Color -> [Move]
 findLegalPawnMoves board (row, col) color =
   let moves = isFirstMove row color
       pawnMoves = [(row + x , col + y) | (x, y) <- moves, checkBounds (row + x, col + y)]
@@ -128,37 +145,48 @@ isFirstMove row color
   | color == White = [(-1, 0)]
   | otherwise = [(1, 0)]
 
-checkPawnMoves :: Board -> (Int, Int) -> [(Int, Int)] -> Color -> [String]
+checkPawnMoves :: Board -> (Int, Int) -> [(Int, Int)] -> Color -> [Move]
 checkPawnMoves _ _ [] _ = []
 checkPawnMoves board startSq ((row, col):rest) color =
-  let moveStr = coordToSquare startSq ++ coordToSquare (row, col)
-      twoSqMove = abs ((fst startSq) - row) > 1
+  let twoSqMove = abs (fst startSq - row) > 1
   in if twoSqMove
-     then case V.unsafeIndex board ((rowAdjustment color row) * 8 + col) of
+     then case V.unsafeIndex board (rowAdjustment color row * 8 + col) of
             0 -> 
-              case board V.! (row * 8 + col) of
-                0 ->
-                  moveStr : checkPawnMoves board startSq rest color
+              case V.unsafeIndex board (row * 8 + col) of
+                0 -> 
+                  let move = Move { from      = startSq, 
+                                    dest      = (row, col), 
+                                    promotion = Nothing,
+                                    capture   = Nothing }
+                  in move : checkPawnMoves board startSq rest color
                 _ -> 
                   checkPawnMoves board startSq rest color
             _ -> []
-     else case board V.! (row * 8 + col) of
+     else case V.unsafeIndex board (row * 8 + col) of
               0 ->
                 -- check if promotion available
                 if color == White && row == 0
-                then [moveStr ++ "N", moveStr ++ "B", moveStr ++ "R", moveStr ++ "Q"] ++ checkPawnMoves board startSq rest color
+                then let knightPromotion = Move {from = startSq, dest = (row, col), promotion = Just 'N', capture = Nothing}
+                         bishopPromotion = Move {from = startSq, dest = (row, col), promotion = Just 'B', capture = Nothing}
+                         rookPromotion   = Move {from = startSq, dest = (row, col), promotion = Just 'R', capture = Nothing}
+                         queenPromotion  = Move {from = startSq, dest = (row, col), promotion = Just 'Q', capture = Nothing}
+                     in [knightPromotion, bishopPromotion, rookPromotion, queenPromotion] ++ checkPawnMoves board startSq rest color
                 else if color == Black && row == 7
-                     then [moveStr ++ "n", moveStr ++ "b", moveStr ++ "r", moveStr ++ "q"] ++ checkPawnMoves board startSq rest color
-                     else moveStr : checkPawnMoves board startSq rest color
+                     then let knightPromotion = Move {from = startSq, dest = (row, col), promotion = Just 'n', capture = Nothing}
+                              bishopPromotion = Move {from = startSq, dest = (row, col), promotion = Just 'b', capture = Nothing}
+                              rookPromotion   = Move {from = startSq, dest = (row, col), promotion = Just 'r', capture = Nothing}
+                              queenPromotion  = Move {from = startSq, dest = (row, col), promotion = Just 'q', capture = Nothing}
+                          in [knightPromotion, bishopPromotion, rookPromotion, queenPromotion] ++ checkPawnMoves board startSq rest color
+                     else let move = Move {from = startSq, dest = (row, col), promotion = Nothing, capture = Nothing}
+                          in move : checkPawnMoves board startSq rest color
               _ ->
                 checkPawnMoves board startSq rest color
 
 -- checks if pawn capture offset target an enemy piece, returns list of possible captures
-checkPawnCaptures :: Board -> (Int, Int) -> [(Int, Int)] -> Color -> [String]
+checkPawnCaptures :: Board -> (Int, Int) -> [(Int, Int)] -> Color -> [Move]
 checkPawnCaptures _ _ [] _ = [] 
 checkPawnCaptures board startSq ((row, col):rest) color = 
-  let moveStr = coordToSquare startSq ++ coordToSquare (row, col)
-  in case V.unsafeIndex board (row * 8 + col) of
+  case V.unsafeIndex board (row * 8 + col) of
     0 ->
       checkPawnCaptures board startSq rest color
     code
@@ -166,35 +194,44 @@ checkPawnCaptures board startSq ((row, col):rest) color =
       | color == Black && code >= 7 -> checkPawnCaptures board startSq rest color
       | otherwise -> 
         if color == White && row == 0
-        then [moveStr ++ "N", moveStr ++ "B", moveStr ++ "R", moveStr ++ "Q"] ++ checkPawnCaptures board startSq rest color
+        then let knightPromotion = Move {from = startSq, dest = (row, col), promotion = Just 'N', capture = Just code}
+                 bishopPromotion = Move {from = startSq, dest = (row, col), promotion = Just 'B', capture = Just code}
+                 rookPromotion   = Move {from = startSq, dest = (row, col), promotion = Just 'R', capture = Just code}
+                 queenPromotion  = Move {from = startSq, dest = (row, col), promotion = Just 'Q', capture = Just code}
+             in [knightPromotion, bishopPromotion, rookPromotion, queenPromotion] ++ checkPawnCaptures board startSq rest color
         else if color == Black && row == 7
-             then [moveStr ++ "n", moveStr ++ "b", moveStr ++ "r", moveStr ++ "q"] ++ checkPawnCaptures board startSq rest color
-             else moveStr : checkPawnCaptures board startSq rest color
+             then let knightPromotion = Move {from = startSq, dest = (row, col), promotion = Just 'n', capture = Just code}
+                      bishopPromotion = Move {from = startSq, dest = (row, col), promotion = Just 'b', capture = Just code}
+                      rookPromotion   = Move {from = startSq, dest = (row, col), promotion = Just 'r', capture = Just code}
+                      queenPromotion  = Move {from = startSq, dest = (row, col), promotion = Just 'q', capture = Just code}
+             in [knightPromotion, bishopPromotion, rookPromotion, queenPromotion] ++ checkPawnCaptures board startSq rest color
+             else let move = Move {from = startSq, dest = (row, col), promotion = Nothing, capture = Nothing}
+                  in move : checkPawnCaptures board startSq rest color
 
 -- different offset for white and black when pawn tries to move over piece
 rowAdjustment :: Color -> Int -> Int
-rowAdjustment (White) x = x + 1
+rowAdjustment White x = x + 1
 rowAdjustment _  x = x - 1
 
 -- simulates board after pseudo-legal move and checks if king is not in check
-kingInCheck :: Board -> String -> Color -> Bool
+kingInCheck :: Board -> Move -> Color -> Bool
 kingInCheck board move color = 
   let boardAfterMove = playMove board move
       opponentColor = toggleColor color
       kingCoord = kingLocation (mapPieces boardAfterMove) color
       enemyMoves = listLegalMoves (mapPieces boardAfterMove) opponentColor boardAfterMove
-  in elem kingCoord (map (snd . splitMove) enemyMoves)
+  in elem kingCoord (map dest enemyMoves)
 
-kingLocation :: [((Int, Int), Int)] -> Color -> String
-kingLocation [] _ = ""
+kingLocation :: [((Int, Int), Int)] -> Color -> (Int, Int)
 kingLocation (((row, col), piece):rest) color = 
   if (piece == 6 && color == White) || (piece == 12 && color == Black) 
-  then coordToSquare (row, col)
+  then (row, col)
   else kingLocation rest color
+kingLocation [] _ = error "king not found"
 
 checkmateDetection :: Board -> Color -> Bool
 checkmateDetection board color  = 
   let kingCoord = kingLocation (mapPieces board) color
       opponentColor = toggleColor color
       enemyMoves = listLegalMoves (mapPieces board) opponentColor board
-  in (elem kingCoord (map (snd . splitMove) enemyMoves))
+  in elem kingCoord (map dest enemyMoves)

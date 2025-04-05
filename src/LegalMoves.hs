@@ -9,8 +9,8 @@ import Types (Color(..), Move(..), Board)
 -- first generate pseudo-legal moves and then filter out ones that leaves the king in check
 findLegalMoves :: Board -> Color -> [Move]
 findLegalMoves board color = 
-  let piecesWithCoords = mapPieces board
-      pseudoLegal = listLegalMoves piecesWithCoords color board
+  let mappedPieces = mapPieces board
+      pseudoLegal = listPseudoLegalMoves mappedPieces color board
       legalMoves = filter (\move -> not (kingInCheck board move color)) pseudoLegal
   in legalMoves
 
@@ -25,26 +25,27 @@ mapPieces board =
   , piece /= 0
   ]
 
-listLegalMoves :: [((Int, Int), Int)] -> Color -> Board -> [Move]
-listLegalMoves [] _ _ = []
-listLegalMoves (((row, col), piece):rest) color board =
+-- generates a list of pseudo-legal moves
+listPseudoLegalMoves :: [((Int, Int), Int)] -> Color -> Board -> [Move]
+listPseudoLegalMoves [] _ _ = []
+listPseudoLegalMoves (((row, col), piece):rest) color board =
   if color == White
   then case piece of
-    1 -> findLegalPawnMoves board (row, col) color   ++ listLegalMoves rest color board
-    2 -> findLegalKnightMoves board (row, col) color ++ listLegalMoves rest color board
-    3 -> findLegalBishopMoves board (row, col) color ++ listLegalMoves rest color board
-    4 -> findLegalRookMoves board (row, col) color   ++ listLegalMoves rest color board
-    5 -> findLegalQueenMoves board (row, col) color  ++ listLegalMoves rest color board
-    6 -> findLegalKingMoves board (row, col) color   ++ listLegalMoves rest color board
-    _ -> listLegalMoves rest color board
+    1 -> findLegalPawnMoves board (row, col) color   ++ listPseudoLegalMoves rest color board
+    2 -> findLegalKnightMoves board (row, col) color ++ listPseudoLegalMoves rest color board
+    3 -> findLegalBishopMoves board (row, col) color ++ listPseudoLegalMoves rest color board
+    4 -> findLegalRookMoves board (row, col) color   ++ listPseudoLegalMoves rest color board
+    5 -> findLegalQueenMoves board (row, col) color  ++ listPseudoLegalMoves rest color board
+    6 -> findLegalKingMoves board (row, col) color   ++ listPseudoLegalMoves rest color board
+    _ -> listPseudoLegalMoves rest color board
   else case piece of
-    7  -> findLegalPawnMoves board (row, col) color   ++ listLegalMoves rest color board
-    8  -> findLegalKnightMoves board (row, col) color ++ listLegalMoves rest color board
-    9  -> findLegalBishopMoves board (row, col) color ++ listLegalMoves rest color board
-    10 -> findLegalRookMoves board (row, col) color   ++ listLegalMoves rest color board
-    11 -> findLegalQueenMoves board (row, col) color  ++ listLegalMoves rest color board
-    12 -> findLegalKingMoves board (row, col) color   ++ listLegalMoves rest color board
-    _ -> listLegalMoves rest color board
+    7  -> findLegalPawnMoves board (row, col) color   ++ listPseudoLegalMoves rest color board
+    8  -> findLegalKnightMoves board (row, col) color ++ listPseudoLegalMoves rest color board
+    9  -> findLegalBishopMoves board (row, col) color ++ listPseudoLegalMoves rest color board
+    10 -> findLegalRookMoves board (row, col) color   ++ listPseudoLegalMoves rest color board
+    11 -> findLegalQueenMoves board (row, col) color  ++ listPseudoLegalMoves rest color board
+    12 -> findLegalKingMoves board (row, col) color   ++ listPseudoLegalMoves rest color board
+    _ -> listPseudoLegalMoves rest color board
 
 -- sliding pieces
 findLegalRookMoves :: Board -> (Int, Int) -> Color -> [Move]
@@ -83,7 +84,8 @@ movesInDirection board startSq (row, col) (x, y) color =
            let move = Move { from      = startSq,
                              dest      = (row + x, col + y),
                              promotion = Nothing,
-                             capture   = Nothing }
+                             capture   = Nothing, 
+                             castle = Nothing }
            in move : movesInDirection board startSq (row + x, col + y) (x, y) color
          code
            | color == White && code <= 6 -> []
@@ -92,7 +94,8 @@ movesInDirection board startSq (row, col) (x, y) color =
               let captureMove = Move { from      = startSq,
                                        dest      = (row + x, col + y),
                                        promotion = Nothing,
-                                       capture   = Just code }
+                                       capture   = Just code, 
+                                       castle = Nothing }
               in [captureMove]
   else []
 
@@ -118,7 +121,8 @@ checkSquare board startSq ((row, col):rest) color =
       let move = Move { from      = startSq,
                         dest      = (row, col),
                         promotion = Nothing,
-                        capture   = Nothing }
+                        capture   = Nothing,
+                        castle    = Nothing }
       in move : checkSquare board startSq rest color
     code
       | color == White && code <= 6 -> checkSquare board startSq rest color
@@ -127,7 +131,8 @@ checkSquare board startSq ((row, col):rest) color =
           let captureMove = Move { from      = startSq,
                                    dest      = (row, col),
                                    promotion = Nothing,
-                                   capture   = Just code }
+                                   capture   = Just code, 
+                                   castle    = Nothing }
           in captureMove : checkSquare board startSq rest color
 
 findLegalPawnMoves :: Board -> (Int, Int) -> Color -> [Move]
@@ -157,7 +162,8 @@ checkPawnMoves board startSq ((row, col):rest) color =
                   let move = Move { from      = startSq, 
                                     dest      = (row, col), 
                                     promotion = Nothing,
-                                    capture   = Nothing }
+                                    capture   = Nothing,
+                                    castle    = Nothing }
                   in move : checkPawnMoves board startSq rest color
                 _ -> 
                   checkPawnMoves board startSq rest color
@@ -166,23 +172,23 @@ checkPawnMoves board startSq ((row, col):rest) color =
               0 ->
                 -- check if promotion available
                 if color == White && row == 0
-                then let knightPromotion = Move {from = startSq, dest = (row, col), promotion = Just 'N', capture = Nothing}
-                         bishopPromotion = Move {from = startSq, dest = (row, col), promotion = Just 'B', capture = Nothing}
-                         rookPromotion   = Move {from = startSq, dest = (row, col), promotion = Just 'R', capture = Nothing}
-                         queenPromotion  = Move {from = startSq, dest = (row, col), promotion = Just 'Q', capture = Nothing}
+                then let knightPromotion = Move {from = startSq, dest = (row, col), promotion = Just 'N', capture = Nothing, castle = Nothing}
+                         bishopPromotion = Move {from = startSq, dest = (row, col), promotion = Just 'B', capture = Nothing, castle = Nothing}
+                         rookPromotion   = Move {from = startSq, dest = (row, col), promotion = Just 'R', capture = Nothing, castle = Nothing}
+                         queenPromotion  = Move {from = startSq, dest = (row, col), promotion = Just 'Q', capture = Nothing, castle = Nothing}
                      in [knightPromotion, bishopPromotion, rookPromotion, queenPromotion] ++ checkPawnMoves board startSq rest color
                 else if color == Black && row == 7
-                     then let knightPromotion = Move {from = startSq, dest = (row, col), promotion = Just 'n', capture = Nothing}
-                              bishopPromotion = Move {from = startSq, dest = (row, col), promotion = Just 'b', capture = Nothing}
-                              rookPromotion   = Move {from = startSq, dest = (row, col), promotion = Just 'r', capture = Nothing}
-                              queenPromotion  = Move {from = startSq, dest = (row, col), promotion = Just 'q', capture = Nothing}
+                     then let knightPromotion = Move {from = startSq, dest = (row, col), promotion = Just 'n', capture = Nothing, castle = Nothing}
+                              bishopPromotion = Move {from = startSq, dest = (row, col), promotion = Just 'b', capture = Nothing, castle = Nothing}
+                              rookPromotion   = Move {from = startSq, dest = (row, col), promotion = Just 'r', capture = Nothing, castle = Nothing}
+                              queenPromotion  = Move {from = startSq, dest = (row, col), promotion = Just 'q', capture = Nothing, castle = Nothing}
                           in [knightPromotion, bishopPromotion, rookPromotion, queenPromotion] ++ checkPawnMoves board startSq rest color
-                     else let move = Move {from = startSq, dest = (row, col), promotion = Nothing, capture = Nothing}
+                     else let move = Move {from = startSq, dest = (row, col), promotion = Nothing, capture = Nothing, castle = Nothing}
                           in move : checkPawnMoves board startSq rest color
               _ ->
                 checkPawnMoves board startSq rest color
 
--- checks if pawn capture offset target an enemy piece, returns list of possible captures
+-- checks if pawn capture offset targets an enemy piece, returns list of possible captures
 checkPawnCaptures :: Board -> (Int, Int) -> [(Int, Int)] -> Color -> [Move]
 checkPawnCaptures _ _ [] _ = [] 
 checkPawnCaptures board startSq ((row, col):rest) color = 
@@ -194,18 +200,18 @@ checkPawnCaptures board startSq ((row, col):rest) color =
       | color == Black && code >= 7 -> checkPawnCaptures board startSq rest color
       | otherwise -> 
         if color == White && row == 0
-        then let knightPromotion = Move {from = startSq, dest = (row, col), promotion = Just 'N', capture = Just code}
-                 bishopPromotion = Move {from = startSq, dest = (row, col), promotion = Just 'B', capture = Just code}
-                 rookPromotion   = Move {from = startSq, dest = (row, col), promotion = Just 'R', capture = Just code}
-                 queenPromotion  = Move {from = startSq, dest = (row, col), promotion = Just 'Q', capture = Just code}
+        then let knightPromotion = Move {from = startSq, dest = (row, col), promotion = Just 'N', capture = Just code, castle = Nothing}
+                 bishopPromotion = Move {from = startSq, dest = (row, col), promotion = Just 'B', capture = Just code, castle = Nothing}
+                 rookPromotion   = Move {from = startSq, dest = (row, col), promotion = Just 'R', capture = Just code, castle = Nothing}
+                 queenPromotion  = Move {from = startSq, dest = (row, col), promotion = Just 'Q', capture = Just code, castle = Nothing}
              in [knightPromotion, bishopPromotion, rookPromotion, queenPromotion] ++ checkPawnCaptures board startSq rest color
         else if color == Black && row == 7
-             then let knightPromotion = Move {from = startSq, dest = (row, col), promotion = Just 'n', capture = Just code}
-                      bishopPromotion = Move {from = startSq, dest = (row, col), promotion = Just 'b', capture = Just code}
-                      rookPromotion   = Move {from = startSq, dest = (row, col), promotion = Just 'r', capture = Just code}
-                      queenPromotion  = Move {from = startSq, dest = (row, col), promotion = Just 'q', capture = Just code}
-             in [knightPromotion, bishopPromotion, rookPromotion, queenPromotion] ++ checkPawnCaptures board startSq rest color
-             else let move = Move {from = startSq, dest = (row, col), promotion = Nothing, capture = Nothing}
+             then let knightPromotion = Move {from = startSq, dest = (row, col), promotion = Just 'n', capture = Just code, castle = Nothing}
+                      bishopPromotion = Move {from = startSq, dest = (row, col), promotion = Just 'b', capture = Just code, castle = Nothing}
+                      rookPromotion   = Move {from = startSq, dest = (row, col), promotion = Just 'r', capture = Just code, castle = Nothing}
+                      queenPromotion  = Move {from = startSq, dest = (row, col), promotion = Just 'q', capture = Just code, castle = Nothing}
+                  in [knightPromotion, bishopPromotion, rookPromotion, queenPromotion] ++ checkPawnCaptures board startSq rest color
+             else let move = Move {from = startSq, dest = (row, col), promotion = Nothing, capture = Nothing, castle = Nothing}
                   in move : checkPawnCaptures board startSq rest color
 
 -- different offset for white and black when pawn tries to move over piece
@@ -217,11 +223,13 @@ rowAdjustment _  x = x - 1
 kingInCheck :: Board -> Move -> Color -> Bool
 kingInCheck board move color = 
   let boardAfterMove = playMove board move
+      mappedPieces = mapPieces boardAfterMove
       opponentColor = toggleColor color
-      kingCoord = kingLocation (mapPieces boardAfterMove) color
-      enemyMoves = listLegalMoves (mapPieces boardAfterMove) opponentColor boardAfterMove
+      kingCoord = kingLocation mappedPieces color
+      enemyMoves = listPseudoLegalMoves mappedPieces opponentColor boardAfterMove
   in elem kingCoord (map dest enemyMoves)
 
+-- return king's coordinates
 kingLocation :: [((Int, Int), Int)] -> Color -> (Int, Int)
 kingLocation (((row, col), piece):rest) color = 
   if (piece == 6 && color == White) || (piece == 12 && color == Black) 
@@ -229,9 +237,11 @@ kingLocation (((row, col), piece):rest) color =
   else kingLocation rest color
 kingLocation [] _ = error "king not found"
 
+-- is called when there are no legal moves -> if true checkmate else stalemate
 checkmateDetection :: Board -> Color -> Bool
 checkmateDetection board color  = 
-  let kingCoord = kingLocation (mapPieces board) color
+  let mappedPieces = mapPieces board
+      kingCoord = kingLocation mappedPieces color
       opponentColor = toggleColor color
-      enemyMoves = listLegalMoves (mapPieces board) opponentColor board
+      enemyMoves = listPseudoLegalMoves mappedPieces opponentColor board
   in elem kingCoord (map dest enemyMoves)

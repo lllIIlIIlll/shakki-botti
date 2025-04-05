@@ -2,22 +2,23 @@ module Main (main) where
 
 import Engine (findBestMove)
 import LegalMoves (findLegalMoves)
-import Board (parseFen, updateFen)
-import Types (Color(..))
+import Board (fenToGameState, updateGameState)
+import Utils (coordToSquare, squareToCoord)
+import Types (GameState(..), Move(..))
 
 import System.IO (hFlush, stdout)
-import Data.List.Split (splitOn)
+import Data.List.Split(splitOn)
+import Data.List()
 import Data.Char
 import Data.IORef
 
-setPosition :: IORef String -> String -> IO ()
-setPosition boardRef position = do
-  writeIORef boardRef position
-  putStrLn ("set board to: " ++ position)
-  hFlush stdout
 
-mainLoop :: IORef String -> IO ()
-mainLoop boardRef = do
+setGameState :: IORef GameState -> GameState -> IO ()
+setGameState gameState newGameState = do
+  writeIORef gameState newGameState
+
+mainLoop :: IORef GameState -> IO ()
+mainLoop gameState = do
     input <- getLine
 
     let tagAndData = splitOn ":" input
@@ -26,46 +27,73 @@ mainLoop boardRef = do
 
     case tag of
       "BOARD" -> do
-        let newFen = resData
-        setPosition boardRef newFen
-        mainLoop boardRef
+        let newGameState = fenToGameState resData
+        putStrLn resData
+        hFlush stdout
+
+        setGameState gameState newGameState
+        mainLoop gameState
 
       "RESET" -> do
-        let startFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
-        putStrLn ("board reset: " ++ startFen)
+        let newGameState = fenToGameState "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+        putStrLn "reset"
         hFlush stdout
-        setPosition boardRef startFen
-        mainLoop boardRef
+
+        setGameState gameState newGameState
+        mainLoop gameState
 
       "PLAY" -> do
-        currentFen <- readIORef boardRef
-        let bestMove = findBestMove (parseFen currentFen) currentFen
-        let legalMoves = findLegalMoves (parseFen currentFen) Black
-        putStrLn ("These are black's legal moves: " ++ show legalMoves)
-        putStrLn ("Eval: " ++ show (fst bestMove))
-        putStrLn ("Black chose the move: " ++ snd bestMove)
-        hFlush stdout
+        currentGameState <- readIORef gameState
+        
+        -- for debugging
+        -- let legalMoves = findLegalMoves (board currentGameState) (turn currentGameState)
+        -- let ordLegalMoves = sortBy (comparing (Down . capture)) legalMoves
+        -- putStrLn ("These are black's legal moves: " ++ show ordLegalMoves)
 
-        putStrLn ("MOVE:" ++ snd bestMove)
-        hFlush stdout
+        let (eval, move) = findBestMove (board currentGameState) (turn currentGameState)
+        case move of
+          Just move' -> do
+            let moveStr = coordToSquare (from move') ++ coordToSquare (dest move')  
+            let fullMoveStr = case promotion move' of
+                                Just p  -> moveStr ++ [p]
+                                Nothing -> moveStr
 
-        let newBoardRef = updateFen currentFen (snd bestMove)
-        setPosition boardRef newBoardRef
-        mainLoop boardRef
+            putStrLn ("Eval: " ++ show eval)
+            putStrLn ("Black chose the move: " ++ fullMoveStr)
+            hFlush stdout
+
+            putStrLn ("MOVE:" ++ fullMoveStr)
+            hFlush stdout
+
+            let newGameState = updateGameState currentGameState move'
+            setGameState gameState newGameState
+            mainLoop gameState
+
+          Nothing -> do
+            putStrLn "GAME OVER"
 
       "MOVE" -> do
-        currentFen <- readIORef boardRef
+        currentGameState <- readIORef gameState
+
         -- promotion move's last char is always lowercase
         let correctedMove = if length resData == 5
-                             then take 4 resData ++ [toUpper (resData !! 4)]
-                             else resData
-        
-        putStrLn ("White chose the move: " ++ correctedMove)
+                            then Move { from      = squareToCoord (take 2 resData),
+                                        dest      = squareToCoord (take 2 (drop 2 resData)),
+                                        promotion = Just (toUpper (resData !! 4)),
+                                        capture   = Nothing,
+                                        castle    = Nothing }
+                            else Move { from      = squareToCoord (take 2 resData),
+                                        dest      = squareToCoord (take 2 (drop 2 resData)),
+                                        promotion = Nothing,
+                                        capture   = Nothing,
+                                        castle    = Nothing }
+
+        putStrLn ("White chose the move: " ++ resData)
         hFlush stdout
 
-        let newBoardRef = updateFen currentFen correctedMove
-        setPosition boardRef newBoardRef
-        mainLoop boardRef
+        let newGameState = updateGameState currentGameState correctedMove
+        setGameState gameState newGameState
+        mainLoop gameState
 
       _ -> do
         putStrLn "unknown tag"
@@ -75,5 +103,5 @@ main :: IO ()
 main = do
   putStrLn "lets play chess"
   hFlush stdout
-  boardRef <- newIORef "startpos"
-  mainLoop boardRef
+  gameState <- newIORef (fenToGameState "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+  mainLoop gameState

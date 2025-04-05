@@ -1,12 +1,11 @@
 module Engine (findBestMove, evaluateBoard) where
 
-import Data.List(maximumBy, minimumBy)
 import Data.Ord
 import Data.List.Split()
+import Data.List (sortBy)
 import qualified Data.Vector as V
 
-import Utils (toggleColor, coordToSquare)
-import LegalMoves (findLegalMoves, checkmateDetection, mapPieces) 
+import LegalMoves (findLegalMoves, checkmateDetection) 
 import Board (playMove)
 import Types (Color(..), Move(..), Board)
 import PieceSquareTables (
@@ -25,34 +24,54 @@ import PieceSquareTables (
   )
 
 -- this is the function that the mainloop calls to play engine's move
-findBestMove :: Board -> String -> (Int, String)
-findBestMove board fen = 
-  let color = if words fen !! 1 == "w" then White else Black
-      bestMove = minimax board 4 color
+findBestMove :: Board -> Color -> (Int, Maybe Move)
+findBestMove board color = 
+  let bestMove = minimax board 4 (-99999999) 99999999 color
   in case bestMove of
-      (eval, Just move) ->
-        let moveStr = coordToSquare (from move) ++ coordToSquare (dest move)  
-        in case promotion move of
-             Just p -> (eval, moveStr ++ [p])
-             Nothing        -> (eval, moveStr)
-      (_, Nothing)      -> (99, "")
+      (eval, Just move) -> (eval, Just move)
+      (_, Nothing)      -> (99, Nothing)
 
-minimax :: Board -> Int -> Color -> (Int, Maybe Move)
-minimax board depth color
-  | depth == 0 = 
-    let moves = findLegalMoves board color
-    in (evaluate board color depth moves, Nothing)
-  | otherwise = 
-    let moves = findLegalMoves board color
-    in if null moves
-       then (evaluate board color depth moves, Nothing)
-       else
-         let evals = [(minimax (playMove board move) (depth - 1) (toggleColor color), move) | move <- moves]
-             bestTuple = if color == White
-                         then maximumBy (comparing (fst . fst)) evals
-                         else minimumBy (comparing (fst . fst)) evals
-         in (fst (fst bestTuple), Just (snd bestTuple))
-      
+-- minimax search with alpha-beta-pruning that returns the best evaluation and corresponding move
+minimax :: Board -> Int -> Int -> Int -> Color -> (Int, Maybe Move)
+minimax board depth alpha beta color =
+  let moves = findLegalMoves board color
+  in if depth == 0 || null moves 
+     then (evaluate board color depth moves, Nothing)
+     else if color == White
+            then maximize board (setMoveOrder moves) depth alpha beta Nothing
+            else minimize board (setMoveOrder moves) depth alpha beta Nothing
+
+-- sorts legal moves to prioritize capture moves to improve alpha-beta-pruning
+setMoveOrder :: [Move] -> [Move]
+setMoveOrder = sortBy (comparing (Down . capture))
+
+-- takes a list of white's legal moves and returns the move with the highest evaluation
+-- updates alpha (white's best evaluation) when a move with better evaluation is found
+-- if alpha is greater than beta (black's best evaluation) we stop the search.
+maximize :: Board -> [Move] -> Int -> Int -> Int -> Maybe Move -> (Int, Maybe Move)
+maximize _ [] _ alpha _ best = (alpha, best)
+maximize board (m:moves) depth alpha beta best =
+  let (eval, _) = minimax (playMove board m) (depth - 1) alpha beta Black
+      newAlpha = max alpha eval
+      newBest = if eval > alpha then Just m else best
+  in if newAlpha >= beta
+     then (newAlpha, newBest)
+     else maximize board moves depth newAlpha beta newBest
+
+-- works like maximizer but takes a list of black's legal moves and returns the move with the lowest evaluation
+-- updates beta (black's best evaluation) when a move with lower/better evaluation is found
+-- if alpha is greater than beta (black's best evaluation) we stop the search.
+minimize :: Board -> [Move] -> Int -> Int -> Int -> Maybe Move -> (Int, Maybe Move)
+minimize _ [] _ _ beta best = (beta, best)
+minimize board (m:moves) depth alpha beta best = 
+  let (eval, _) = minimax (playMove board m) (depth - 1) alpha beta White
+      newBeta = min beta eval
+      newBest = if eval < beta then Just m else best
+  in if alpha >= newBeta
+     then (newBeta, newBest)
+     else minimize board moves depth alpha newBeta newBest
+
+-- evaluates board position, if no legal moves the match has ended, either checkmate or stalemate
 evaluate :: Board -> Color -> Int -> [Move] -> Int
 evaluate board color depth moves = 
   if null moves
@@ -62,31 +81,31 @@ evaluate board color depth moves =
             else 100000  + depth
        else 0 -- stalemate
   else evaluateBoard board
-      
+
+-- calculates the overall evaluation score by combining both material and positional evaluations
 evaluateBoard :: Board -> Int
 evaluateBoard board = 
-  let materialEval = V.sum (V.map getPieceValue board)
-      positionEval = calculatePosEval (mapPieces board) 
+  let materialEval = V.foldl' (\acc piece -> acc + getPieceValue piece) 0 board
+      positionEval = V.ifoldl' (\acc idx piece -> acc + getPosValue idx piece) 0 board
   in materialEval + positionEval
 
-calculatePosEval :: [((Int, Int), Int)] -> Int
-calculatePosEval [] = 0
-calculatePosEval (((row, col), piece):pieces) = 
-  case piece of 
-    1  -> V.unsafeIndex whitePawnPrefCoords   ((row * 8) + col) + calculatePosEval pieces
-    2  -> V.unsafeIndex whiteKnightPrefCoords ((row * 8) + col) + calculatePosEval pieces
-    3  -> V.unsafeIndex whiteBishopPrefCoords ((row * 8) + col) + calculatePosEval pieces
-    4  -> V.unsafeIndex whiteRookPrefCoords   ((row * 8) + col) + calculatePosEval pieces
-    5  -> V.unsafeIndex whiteQueenPrefCoords  ((row * 8) + col) + calculatePosEval pieces
-    6  -> calculatePosEval pieces -- V.unsafeIndex whiteKingPrefCoords ((row * 8) + col) 
-    7  -> V.unsafeIndex blackPawnPrefCoords   ((row * 8) + col) + calculatePosEval pieces
-    8  -> V.unsafeIndex blackKnightPrefCoords ((row * 8) + col) + calculatePosEval pieces
-    9  -> V.unsafeIndex blackBishopPrefCoords ((row * 8) + col) + calculatePosEval pieces
-    10 -> V.unsafeIndex blackRookPrefCoords   ((row * 8) + col) + calculatePosEval pieces
-    11 -> V.unsafeIndex blackQueenPrefCoords  ((row * 8) + col) + calculatePosEval pieces
-    12 -> calculatePosEval pieces -- blackKingPrefCoords   V.! ((row * 8) + col)
-    _  -> error "not a valid piece"
+-- returns the positional evaluation value of a piece based on its location on the board
+getPosValue :: Int -> Int -> Int
+getPosValue idx 1  = V.unsafeIndex whitePawnPrefCoords idx
+getPosValue idx 2  = V.unsafeIndex whiteKnightPrefCoords idx
+getPosValue idx 3  = V.unsafeIndex whiteBishopPrefCoords idx
+getPosValue idx 4  = V.unsafeIndex whiteRookPrefCoords idx
+getPosValue idx 5  = V.unsafeIndex whiteQueenPrefCoords idx
+getPosValue idx 6  = 0 -- V.unsafeIndex whiteKingPrefCoords idx
+getPosValue idx 7  = V.unsafeIndex blackPawnPrefCoords idx
+getPosValue idx 8  = V.unsafeIndex blackKnightPrefCoords idx
+getPosValue idx 9  = V.unsafeIndex blackBishopPrefCoords idx
+getPosValue idx 10 = V.unsafeIndex blackRookPrefCoords idx
+getPosValue idx 11 = V.unsafeIndex blackQueenPrefCoords idx
+getPosValue idx 12 = 0 -- V.unsafeIndex blackKingPrefCoords idx
+getPosValue _ _    = 0
 
+-- returns the material evaluation of a piece
 getPieceValue :: Int -> Int
 getPieceValue 1  = 100   -- white pawn
 getPieceValue 2  = 300   -- white knight

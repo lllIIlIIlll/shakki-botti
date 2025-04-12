@@ -1,7 +1,6 @@
 module Main (main) where
 
 import Engine (findBestMove)
-import LegalMoves (findLegalMoves)
 import Board (fenToGameState, updateGameState)
 import Utils (coordToSquare, squareToCoord)
 import Types (GameState(..), Move(..))
@@ -44,11 +43,6 @@ mainLoop gameState = do
 
       "PLAY" -> do
         currentGameState <- readIORef gameState
-        
-        -- for debugging
-        -- let legalMoves = findLegalMoves (board currentGameState) (turn currentGameState)
-        -- let ordLegalMoves = sortBy (comparing (Down . capture)) legalMoves
-        -- putStrLn ("These are black's legal moves: " ++ show ordLegalMoves)
 
         let (eval, move) = findBestMove (board currentGameState) (turn currentGameState)
         case move of

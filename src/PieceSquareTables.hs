@@ -9,8 +9,6 @@ module PieceSquareTables (
   blackRookPrefCoords,
   whiteQueenPrefCoords,
   blackQueenPrefCoords,
-  whiteKingPrefCoords,
-  blackKingPrefCoords
 ) where
 
 import qualified Data.Vector as V
@@ -90,6 +88,7 @@ whiteQueenPrefCoords = V.fromList [
 blackQueenPrefCoords :: V.Vector Int
 blackQueenPrefCoords = V.map negate (V.reverse whiteQueenPrefCoords)
 
+{-
 whiteKingPrefCoords :: V.Vector Int
 whiteKingPrefCoords = V.fromList [
   -50,-30,-30,-30,-30,-30,-30,-50,
@@ -104,3 +103,4 @@ whiteKingPrefCoords = V.fromList [
 
 blackKingPrefCoords :: V.Vector Int
 blackKingPrefCoords = V.map negate (V.reverse whiteKingPrefCoords)
+-}

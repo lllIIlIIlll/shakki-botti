@@ -51,19 +51,18 @@ parseFenRowList (x:xs) =
 -- new update fen
 updateGameState :: GameState -> Move -> GameState
 updateGameState gameState move = 
-  let newBoard = playMove (board gameState) move
+  let updatedBoard = playMove (board gameState) move
       newTurn  = toggleColor (turn gameState)
-      -- castling not implemented yet
+      -- gamestate is not updating these yet
       newWKingCastle  = True
       newWQueenCastle = True
       newBKingCastle  = True
       newBQueenCastle = True
-      -- gamestate is not updating these yet
       newEnPassant = Nothing
       newHalfMove = 0
       newFullMove = 0
    in GameState {
-        board        = newBoard,
+        board        = updatedBoard,
         turn         = newTurn,
         wKingCastle  = newWKingCastle,
         wQueenCastle = newWQueenCastle,

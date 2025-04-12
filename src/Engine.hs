@@ -19,14 +19,12 @@ import PieceSquareTables (
   blackRookPrefCoords,
   whiteQueenPrefCoords,
   blackQueenPrefCoords,
-  --whiteKingPrefCoords,
-  --blackKingPrefCoords
   )
 
 -- this is the function that the mainloop calls to play engine's move
 findBestMove :: Board -> Color -> (Int, Maybe Move)
 findBestMove board color = 
-  let bestMove = minimax board 4 (-99999999) 99999999 color
+  let bestMove = minimax board 6 (-99999999) 99999999 color
   in case bestMove of
       (eval, Just move) -> (eval, Just move)
       (_, Nothing)      -> (99, Nothing)
@@ -96,13 +94,11 @@ getPosValue idx 2  = V.unsafeIndex whiteKnightPrefCoords idx
 getPosValue idx 3  = V.unsafeIndex whiteBishopPrefCoords idx
 getPosValue idx 4  = V.unsafeIndex whiteRookPrefCoords idx
 getPosValue idx 5  = V.unsafeIndex whiteQueenPrefCoords idx
-getPosValue idx 6  = 0 -- V.unsafeIndex whiteKingPrefCoords idx
 getPosValue idx 7  = V.unsafeIndex blackPawnPrefCoords idx
 getPosValue idx 8  = V.unsafeIndex blackKnightPrefCoords idx
 getPosValue idx 9  = V.unsafeIndex blackBishopPrefCoords idx
 getPosValue idx 10 = V.unsafeIndex blackRookPrefCoords idx
 getPosValue idx 11 = V.unsafeIndex blackQueenPrefCoords idx
-getPosValue idx 12 = 0 -- V.unsafeIndex blackKingPrefCoords idx
 getPosValue _ _    = 0
 
 -- returns the material evaluation of a piece

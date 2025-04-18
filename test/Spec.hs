@@ -2,7 +2,7 @@ import Test.Hspec
 import Data.Vector as V
 
 import Types (GameState(..), Move(..), Color(..))
-import Board (fenToGameState, updateGameState, playMove)
+import Board (fenToGameState, updateGameState)
 import Engine (findBestMove, evaluateBoard)
 
 main :: IO ()
@@ -11,18 +11,17 @@ main = hspec $ do
     it "returns empty board gamestate correctly" $ do
       let gameState = fenToGameState "8/8/8/8/8/8/8/8 w KQkq - 0 0"
 
-      let gameStateToCreate = 
-        GameState { board        = V.replicate 64 0,
-                    turn         = White,
-                    wKingCastle  = True,
-                    wQueenCastle = True,
-                    bKingCastle  = True,
-                    bQueenCastle = True,
-                    enPassant    = Nothing,
-                    halfMove     = 0,
-                    fullMove     = 0
-                  }
-      gameState `shouldBe` V.gameStateToCreate
+      let gameStateToCreate = GameState { board        = V.replicate 64 0,
+                                          turn         = White,
+                                          wKingCastle  = True,
+                                          wQueenCastle = True,
+                                          bKingCastle  = True,
+                                          bQueenCastle = True,
+                                          enPassant    = Nothing,
+                                          halfMove     = 0,
+                                          fullMove     = 0
+                                        }
+      gameState `shouldBe` gameStateToCreate
 
     it "correctly updates the gamestate after a move" $ do
       let currentGameState = fenToGameState "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 0"

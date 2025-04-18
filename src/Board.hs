@@ -19,10 +19,10 @@ fenToGameState fenStr =
   in GameState {
         board        = V.fromList (concatMap parseFenRowList boardRows),
         turn         = if fenParts !! 1 == "w" then White else Black,
-        wKingCastle  = elem 'K' (fenParts !! 2),
-        wQueenCastle = elem 'Q' (fenParts !! 2),
-        bKingCastle  = elem 'k' (fenParts !! 2),
-        bQueenCastle = elem 'q' (fenParts !! 2),
+        wKingCastle  = 'K' `elem` (fenParts !! 2),
+        wQueenCastle = 'Q' `elem` (fenParts !! 2),
+        bKingCastle  = 'k' `elem` (fenParts !! 2),
+        bQueenCastle = 'q' `elem` (fenParts !! 2),
         enPassant    = Nothing,
         halfMove     = 0,
         fullMove     = 0

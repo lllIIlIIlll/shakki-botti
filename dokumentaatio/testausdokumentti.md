@@ -4,7 +4,9 @@ Ohjelman testauksessa on käytetty Hspec-kirjastoa. Testit ajetaan komennolla st
 
 ### Testikattavuus
 
-![testikattavuusraportti](./coverage.png)
+![testikattavuusraportti](./coverage-04-16.png)
+
+Raportti generoitu 16.4
 
 ### Mitä testattu
 
